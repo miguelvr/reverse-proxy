@@ -4,17 +4,33 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"net/url"
 
 	proxy "github.com/miguelvr/reverse-proxy"
 )
 
 func main() {
-	var port string
+	var (
+		target string
+		port   string
+	)
+	flag.StringVar(&target, "target-url", "", "target url where the traffic will be forwarded to")
 	flag.StringVar(&port, "port", "8000", "server port")
 	flag.Parse()
 
-	err := http.ListenAndServe(port, proxy.New())
+	if target == "" {
+		log.Fatal("--target-url flag is required")
+	}
+
+	targetURL, err := url.Parse(target)
 	if err != nil {
+		log.Fatal(err)
+	}
+
+	reverseProxy := proxy.New(targetURL)
+
+	log.Printf("Running on port :%s\n", port)
+	if err = http.ListenAndServe(":"+port, reverseProxy); err != nil {
 		log.Fatal(err)
 	}
 }
