@@ -56,7 +56,7 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *ReverseProxy) errorHandler(w http.ResponseWriter, err error) {
-	w.WriteHeader(http.StatusInternalServerError)
+	w.WriteHeader(http.StatusBadGateway)
 	log.Printf("error: %v", err)
 }
 
