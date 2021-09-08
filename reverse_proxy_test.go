@@ -2,6 +2,7 @@ package reverse_proxy
 
 import (
 	"bytes"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -63,14 +64,31 @@ func TestReverseProxy_ServeHTTP(t *testing.T) {
 		t.Run(tt.id, func(t *testing.T) {
 			server := httptest.NewServer(
 				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					// verify body is received correctly
+					body, err := ioutil.ReadAll(r.Body)
+					require.NoError(t, err)
+					defer func() { _ = r.Body.Close() }()
+
+					if tt.request.body != nil {
+						require.Equal(t, tt.request.body, body)
+					}
+
+					// verify headers are received correctly
+					for key := range tt.request.headers {
+						require.Equal(t, tt.request.headers.Get(key), r.Header.Get(key))
+					}
+
+					// set content type
 					if tt.expected.headers != nil {
 						w.Header().Set("Content-Type", tt.expected.headers.Get("Content-Type"))
 					}
+
+					// set status code
 					w.WriteHeader(tt.expected.statusCode)
-					_, err := w.Write(tt.expected.body)
-					if err != nil {
-						t.Fatal("failed to write test server body")
-					}
+
+					// write response body
+					_, err = w.Write(tt.expected.body)
+					require.NoError(t, err)
 				}),
 			)
 			defer server.Close()
