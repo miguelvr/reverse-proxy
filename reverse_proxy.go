@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 // XForwardedForHeader is the key for the X-Forwarded-For http header
@@ -44,6 +45,9 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	stop := p.startFlushing(w)
+	defer stop()
+
 	w.WriteHeader(resp.StatusCode)
 	_, err = io.Copy(w, resp.Body)
 	if err != nil {
@@ -52,6 +56,26 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	copyHeaders(w, resp.Header)
+}
+
+func (p *ReverseProxy) startFlushing(w http.ResponseWriter) func() {
+	stopCh := make(chan struct{})
+	stopFn := func() {
+		stopCh <- struct{}{}
+	}
+
+	go func() {
+		for {
+			select {
+			case <-time.Tick(10 * time.Millisecond):
+				w.(http.Flusher).Flush()
+			case <-stopCh:
+				return
+			}
+		}
+	}()
+
+	return stopFn
 }
 
 func (p *ReverseProxy) errorHandler(w http.ResponseWriter, err error) {
