@@ -6,11 +6,17 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
-// XForwardedForHeader is the key for the X-Forwarded-For http header
-const XForwardedForHeader = "X-Forwarded-For"
+const (
+	// TrailerHeader is the key for the HTTP trailer header
+	TrailerHeader = "Trailer"
+
+	// XForwardedForHeader is the key for the X-Forwarded-For http header
+	XForwardedForHeader = "X-Forwarded-For"
+)
 
 // ReverseProxy is a reverse proxy that satisfies the net/http Handler interface
 type ReverseProxy struct {
@@ -48,6 +54,11 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	stop := p.startFlushing(w)
 	defer stop()
 
+	// Announce trailer header
+	trailerKeys := p.getTrailerKeys(resp)
+	w.Header().Set(TrailerHeader, strings.Join(trailerKeys, ","))
+	copyHeaders(w, resp.Header)
+
 	w.WriteHeader(resp.StatusCode)
 	_, err = io.Copy(w, resp.Body)
 	if err != nil {
@@ -55,7 +66,7 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	copyHeaders(w, resp.Header)
+	copyHeaders(w, resp.Trailer)
 }
 
 func (p *ReverseProxy) startFlushing(w http.ResponseWriter) func() {
@@ -76,6 +87,16 @@ func (p *ReverseProxy) startFlushing(w http.ResponseWriter) func() {
 	}()
 
 	return stopFn
+}
+
+func (p *ReverseProxy) getTrailerKeys(response *http.Response) []string {
+	trailerKeys := make([]string, len(response.Trailer))
+	var i int
+	for key := range response.Trailer {
+		trailerKeys[i] = key
+		i++
+	}
+	return trailerKeys
 }
 
 func (p *ReverseProxy) errorHandler(w http.ResponseWriter, err error) {
