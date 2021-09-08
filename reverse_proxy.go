@@ -61,7 +61,7 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (p *ReverseProxy) startFlushing(w http.ResponseWriter) func() {
 	stopCh := make(chan struct{})
 	stopFn := func() {
-		stopCh <- struct{}{}
+		close(stopCh)
 	}
 
 	go func() {
