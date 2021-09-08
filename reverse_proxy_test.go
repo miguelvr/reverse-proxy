@@ -73,6 +73,7 @@ func TestReverseProxy_ServeHTTP(t *testing.T) {
 					}
 				}),
 			)
+			defer server.Close()
 
 			serverURL, _ := url.Parse(server.URL)
 			reverseProxy := &ReverseProxy{
