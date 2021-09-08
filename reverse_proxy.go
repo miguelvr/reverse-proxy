@@ -26,11 +26,10 @@ func New(target *url.URL) *ReverseProxy {
 }
 
 func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	r.URL = p.target
 	r.Host = p.target.Host
 	r.URL.Host = p.target.Host
 	r.URL.Scheme = p.target.Scheme
-	r.RequestURI = ""
+	r.RequestURI = "" // client does not allow request to have a set request URI
 
 	remoteAddrHost, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
