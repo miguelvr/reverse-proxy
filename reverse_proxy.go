@@ -28,7 +28,7 @@ type ReverseProxy struct {
 func New(target *url.URL) *ReverseProxy {
 	return &ReverseProxy{
 		target: target,
-		client: &http.Client{},
+		client: http.DefaultClient,
 	}
 }
 
