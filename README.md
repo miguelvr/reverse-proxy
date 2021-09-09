@@ -1,6 +1,6 @@
 # Reverse Proxy
 
-A simple HTTP reverse proxy with request caching, written in GoLang.
+A simple HTTP reverse proxy with in-memory request caching, written in GoLang.
 
 ## Supported Features
 
