@@ -56,7 +56,7 @@ A simple HTTP reverse proxy with in-memory request caching, written in GoLang.
     # 0
    
     # Trailer Endpoint
-    curl -i --raw http://localhost:8001/stream
+    curl -i --raw http://localhost:8001/trailer
    
     # HTTP/1.1 200 OK
     # Content-Type: text/plain; charset=utf-8
