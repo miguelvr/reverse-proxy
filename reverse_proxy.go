@@ -108,11 +108,14 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// write status code
 	w.WriteHeader(resp.StatusCode)
 
+	// set up a tee reader to read into the response writer and to a buffer for caching the response
 	var buf bytes.Buffer
 	respBodyReader := resp.Body
 	if !found && shouldCache {
 		respBodyReader = io.NopCloser(io.TeeReader(resp.Body, &buf))
 	}
+
+	// guarantee that the request body is always closed
 	defer func() { _ = r.Body.Close() }()
 
 	// copy response body from target server
@@ -122,13 +125,14 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp.Body = io.NopCloser(&buf)
-
 	// copy trailer header values
 	copyHeaders(w, resp.Trailer)
 
 	// cache response if required
 	if !found && shouldCache {
+		// replace response body with the unread buffer reader
+		resp.Body = io.NopCloser(&buf)
+
 		err = p.saveToCache(reqHash, resp)
 		if err != nil {
 			log.Printf("error: %v\n", err)
