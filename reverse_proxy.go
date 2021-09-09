@@ -6,7 +6,6 @@ import (
 	"crypto/sha1"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -109,28 +108,27 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// write status code
 	w.WriteHeader(resp.StatusCode)
 
-	respBody, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		p.errorHandler(w, err)
-		return
+	var buf bytes.Buffer
+	respBodyReader := resp.Body
+	if !found && shouldCache {
+		respBodyReader = io.NopCloser(io.TeeReader(resp.Body, &buf))
 	}
-
-	resp.Body = ioutil.NopCloser(bytes.NewBuffer(respBody))
+	defer func() { _ = r.Body.Close() }()
 
 	// copy response body from target server
-	_, err = io.Copy(w, resp.Body)
+	_, err = io.Copy(w, respBodyReader)
 	if err != nil {
 		p.errorHandler(w, err)
 		return
 	}
+
+	resp.Body = io.NopCloser(&buf)
 
 	// copy trailer header values
 	copyHeaders(w, resp.Trailer)
 
 	// cache response if required
 	if !found && shouldCache {
-		resp.Body = ioutil.NopCloser(bytes.NewBuffer(respBody))
-
 		err = p.saveToCache(reqHash, resp)
 		if err != nil {
 			log.Printf("error: %v\n", err)
