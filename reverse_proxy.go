@@ -146,10 +146,12 @@ func (p *ReverseProxy) startFlushing(w http.ResponseWriter) func() {
 		close(stopCh)
 	}
 
+	ticker := time.NewTicker(p.flushInterval)
+
 	go func() {
 		for {
 			select {
-			case <-time.Tick(p.flushInterval):
+			case <-ticker.C:
 				w.(http.Flusher).Flush()
 			case <-stopCh:
 				return
