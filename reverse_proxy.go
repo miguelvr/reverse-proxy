@@ -211,7 +211,7 @@ func (p *ReverseProxy) getFromCache(reqHash string) (*http.Response, bool, error
 }
 
 func (p *ReverseProxy) saveToCache(reqHash string, response *http.Response) error {
-	var buf = &bytes.Buffer{}
+	buf := &bytes.Buffer{}
 	if err := response.Write(buf); err != nil {
 		return err
 	}
