@@ -28,9 +28,10 @@ func main() {
 	}
 
 	reverseProxy := proxy.New(targetURL)
+	cachedReverseProxy := proxy.NewCache(reverseProxy)
 
 	log.Printf("Running on port :%s\n", port)
-	if err = http.ListenAndServe(":"+port, reverseProxy); err != nil {
+	if err = http.ListenAndServe(":"+port, cachedReverseProxy); err != nil {
 		log.Fatal(err)
 	}
 }

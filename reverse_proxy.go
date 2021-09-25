@@ -1,10 +1,6 @@
-package reverse_proxy
+package reverseproxy
 
 import (
-	"bufio"
-	"bytes"
-	"crypto/sha1"
-	"fmt"
 	"io"
 	"log"
 	"net"
@@ -12,8 +8,6 @@ import (
 	"net/url"
 	"strings"
 	"time"
-
-	"github.com/patrickmn/go-cache"
 )
 
 const (
@@ -30,7 +24,6 @@ const (
 type ReverseProxy struct {
 	target        *url.URL
 	client        *http.Client
-	cache         *cache.Cache
 	flushInterval time.Duration
 }
 
@@ -39,7 +32,6 @@ func New(target *url.URL) *ReverseProxy {
 	return &ReverseProxy{
 		target:        target,
 		client:        http.DefaultClient,
-		cache:         cache.New(1*time.Minute, 10*time.Minute),
 		flushInterval: defaultFlushInterval,
 	}
 }
@@ -57,44 +49,19 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Header.Set(XForwardedForHeader, remoteAddrHost)
 
-	var (
-		reqHash string
-		resp    *http.Response
-		found   bool
-	)
-
-	// decide if request should be cached, since not all requests should be cached
-	shouldCache := p.shouldCache(r)
-	if shouldCache {
-		// generate a request hash
-		reqHash, err = p.requestHash(r)
-		if err != nil {
-			p.errorHandler(w, err)
-			return
-		}
-
-		// check if the request hash is in the cache
-		resp, found, err = p.getFromCache(reqHash)
-		if err != nil {
-			log.Printf("error: %v\n", err)
-		}
+	// execute http request
+	resp, err := p.client.Do(r)
+	if err != nil {
+		p.errorHandler(w, err)
+		return
 	}
 
-	if !found || !shouldCache {
-		// execute http request
-		resp, err = p.client.Do(r)
-		if err != nil {
-			p.errorHandler(w, err)
-			return
-		}
+	// guarantee that the response body is always closed
+	defer func() { _ = r.Body.Close() }()
 
-		// start goroutine to periodically flush request writer
-		stop := p.startFlushing(w)
-		defer stop()
-	}
-
-	// custom header to validate if a response was cached (mostly for demo purposes)
-	w.Header().Set("X-Proxy-Cached", fmt.Sprintf("%t", shouldCache && found))
+	// start goroutine to periodically flush request writer
+	stop := p.startFlushing(w)
+	defer stop()
 
 	// Announce trailer header
 	trailerKeys := p.getTrailerKeys(resp)
@@ -108,36 +75,18 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// write status code
 	w.WriteHeader(resp.StatusCode)
 
-	// set up a tee reader to read into the response writer and to a buffer for caching the response
-	var buf bytes.Buffer
-	respBodyReader := resp.Body
-	if !found && shouldCache {
-		respBodyReader = io.NopCloser(io.TeeReader(resp.Body, &buf))
-	}
-
-	// guarantee that the request body is always closed
-	defer func() { _ = r.Body.Close() }()
-
 	// copy response body from target server
-	_, err = io.Copy(w, respBodyReader)
+	_, err = io.Copy(w, resp.Body)
 	if err != nil {
-		p.errorHandler(w, err)
+		log.Printf("error: %v", err)
 		return
 	}
 
+	// guarantee that the response body is always closed
+	defer func() { _ = resp.Body.Close() }()
+
 	// copy trailer header values
 	copyHeaders(w, resp.Trailer)
-
-	// cache response if required
-	if !found && shouldCache {
-		// replace response body with the unread buffer reader
-		resp.Body = io.NopCloser(&buf)
-
-		err = p.saveToCache(reqHash, resp)
-		if err != nil {
-			log.Printf("error: %v\n", err)
-		}
-	}
 }
 
 func (p *ReverseProxy) startFlushing(w http.ResponseWriter) func() {
@@ -175,49 +124,6 @@ func (p *ReverseProxy) getTrailerKeys(response *http.Response) []string {
 func (p *ReverseProxy) errorHandler(w http.ResponseWriter, err error) {
 	w.WriteHeader(http.StatusBadGateway)
 	log.Printf("error: %v", err)
-}
-
-func (p *ReverseProxy) shouldCache(r *http.Request) bool {
-	return r.Method == http.MethodGet
-}
-
-func (p *ReverseProxy) requestHash(request *http.Request) (string, error) {
-	h := sha1.New()
-	_, err := io.WriteString(h, request.URL.String())
-	if err != nil {
-		return "", err
-	}
-
-	if err = request.Header.Write(h); err != nil {
-		return "", err
-	}
-
-	return fmt.Sprintf("%x", h.Sum(nil)), nil
-}
-
-func (p *ReverseProxy) getFromCache(reqHash string) (*http.Response, bool, error) {
-	respBytes, found := p.cache.Get(reqHash)
-	if !found {
-		return nil, found, nil
-	}
-
-	buf := bufio.NewReader(bytes.NewReader(respBytes.([]byte)))
-	response, err := http.ReadResponse(buf, nil)
-	if err != nil {
-		return nil, false, err
-	}
-
-	return response, found, nil
-}
-
-func (p *ReverseProxy) saveToCache(reqHash string, response *http.Response) error {
-	buf := &bytes.Buffer{}
-	if err := response.Write(buf); err != nil {
-		return err
-	}
-
-	p.cache.Set(reqHash, buf.Bytes(), cache.DefaultExpiration)
-	return nil
 }
 
 func copyHeaders(w http.ResponseWriter, headers http.Header) {
