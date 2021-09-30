@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/miguelvr/reverse-proxy/pkg/proxy"
 	"github.com/miguelvr/reverse-proxy/pkg/middleware/cache"
+	"github.com/miguelvr/reverse-proxy/pkg/proxy"
 )
 
 func main() {
