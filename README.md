@@ -8,6 +8,7 @@ A simple HTTP reverse proxy with in-memory request caching, written in GoLang.
 - [x] HTTP Streaming
 - [x] Trailer
 - [x] `GET` request caching
+- [x] OpenTelemetry Request Tracing 
 
 ## Demo
 
