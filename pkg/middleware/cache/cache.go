@@ -1,4 +1,4 @@
-package reverseproxy
+package cache
 
 import (
 	"bytes"
@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/miguelvr/reverse-proxy/pkg/httputil"
 	"github.com/patrickmn/go-cache"
 )
 
@@ -53,7 +54,7 @@ type Cache struct {
 	next  http.Handler
 }
 
-func NewCache(next http.Handler) *Cache {
+func New(next http.Handler) *Cache {
 	return &Cache{
 		cache: cache.New(1*time.Minute, 10*time.Minute),
 		next:  next,
@@ -80,7 +81,7 @@ func (c *Cache) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// check if the request hash is in the cache
 		cachedResp, found := c.getFromCache(reqHash)
 		if found {
-			copyHeaders(w, cachedResp.Headers)
+			httputil.CopyHeaders(w, cachedResp.Headers)
 			w.Header().Set("X-Proxy-Cached", "true")
 			_, _ = w.Write(cachedResp.Body)
 			return

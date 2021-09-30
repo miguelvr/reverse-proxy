@@ -1,4 +1,4 @@
-package reverseproxy
+package proxy
 
 import (
 	"bytes"
@@ -95,8 +95,9 @@ func TestReverseProxy_ServeHTTP(t *testing.T) {
 
 			serverURL, _ := url.Parse(server.URL)
 			reverseProxy := &ReverseProxy{
-				target: serverURL,
-				client: http.DefaultClient,
+				target:        serverURL,
+				client:        http.DefaultClient,
+				flushInterval: defaultFlushInterval,
 			}
 
 			w := httptest.NewRecorder()

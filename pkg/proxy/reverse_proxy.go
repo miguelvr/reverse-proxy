@@ -1,4 +1,4 @@
-package reverseproxy
+package proxy
 
 import (
 	"io"
@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/miguelvr/reverse-proxy/pkg/httputil"
 )
 
 const (
@@ -70,7 +72,7 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// copy response headers from target server
-	copyHeaders(w, resp.Header)
+	httputil.CopyHeaders(w, resp.Header)
 
 	// write status code
 	w.WriteHeader(resp.StatusCode)
@@ -86,7 +88,7 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer func() { _ = resp.Body.Close() }()
 
 	// copy trailer header values
-	copyHeaders(w, resp.Trailer)
+	httputil.CopyHeaders(w, resp.Trailer)
 }
 
 func (p *ReverseProxy) startFlushing(w http.ResponseWriter) func() {
@@ -124,12 +126,4 @@ func (p *ReverseProxy) getTrailerKeys(response *http.Response) []string {
 func (p *ReverseProxy) errorHandler(w http.ResponseWriter, err error) {
 	w.WriteHeader(http.StatusBadGateway)
 	log.Printf("error: %v", err)
-}
-
-func copyHeaders(w http.ResponseWriter, headers http.Header) {
-	for key, values := range headers {
-		for _, value := range values {
-			w.Header().Set(key, value)
-		}
-	}
 }

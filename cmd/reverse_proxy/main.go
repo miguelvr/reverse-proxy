@@ -6,7 +6,8 @@ import (
 	"net/http"
 	"net/url"
 
-	proxy "github.com/miguelvr/reverse-proxy"
+	"github.com/miguelvr/reverse-proxy/pkg/proxy"
+	"github.com/miguelvr/reverse-proxy/pkg/middleware/cache"
 )
 
 func main() {
@@ -28,7 +29,7 @@ func main() {
 	}
 
 	reverseProxy := proxy.New(targetURL)
-	cachedReverseProxy := proxy.NewCache(reverseProxy)
+	cachedReverseProxy := cache.New(reverseProxy)
 
 	log.Printf("Running on port :%s\n", port)
 	if err = http.ListenAndServe(":"+port, cachedReverseProxy); err != nil {
