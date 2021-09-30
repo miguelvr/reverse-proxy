@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/miguelvr/reverse-proxy/pkg/httputil"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
 )
 
 const (
@@ -30,15 +32,19 @@ type ReverseProxy struct {
 }
 
 // New creates a new instance of ReverseProxy
-func New(target *url.URL) *ReverseProxy {
+func New(target *url.URL) http.Handler {
 	return &ReverseProxy{
 		target:        target,
-		client:        http.DefaultClient,
+		client:        otelhttp.DefaultClient,
 		flushInterval: defaultFlushInterval,
 	}
 }
 
 func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	tracer := otel.Tracer("proxy/reverse_proxy")
+	_, span := tracer.Start(r.Context(), "reverse proxy")
+	defer span.End()
+
 	r.Host = p.target.Host
 	r.URL.Host = p.target.Host
 	r.URL.Scheme = p.target.Scheme

@@ -11,6 +11,8 @@ import (
 
 	"github.com/miguelvr/reverse-proxy/pkg/httputil"
 	"github.com/patrickmn/go-cache"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type cachedResponse struct {
@@ -54,7 +56,7 @@ type Cache struct {
 	next  http.Handler
 }
 
-func New(next http.Handler) *Cache {
+func WithCache(next http.Handler) http.Handler {
 	return &Cache{
 		cache: cache.New(1*time.Minute, 10*time.Minute),
 		next:  next,
@@ -62,6 +64,10 @@ func New(next http.Handler) *Cache {
 }
 
 func (c *Cache) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	var cacheAccessSpan trace.Span
+	tracer := otel.Tracer("middleware/cache")
+
 	shouldCache := c.shouldCache(r)
 
 	var (
@@ -70,6 +76,9 @@ func (c *Cache) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if shouldCache {
+		_, cacheAccessSpan = tracer.Start(ctx, "cache access")
+		defer cacheAccessSpan.End()
+
 		// generate a request hash
 		reqHash, err = c.requestHash(r)
 		if err != nil {
@@ -84,8 +93,10 @@ func (c *Cache) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			httputil.CopyHeaders(w, cachedResp.Headers)
 			w.Header().Set("X-Proxy-Cached", "true")
 			_, _ = w.Write(cachedResp.Body)
+			cacheAccessSpan.AddEvent("cache_hit")
 			return
 		}
+		cacheAccessSpan.End()
 	}
 
 	w.Header().Set("X-Proxy-Cached", "false")
@@ -94,6 +105,9 @@ func (c *Cache) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	mw := NewResponseMultiWriter(&buf, w)
 
 	c.next.ServeHTTP(mw, r)
+
+	_, span := tracer.Start(ctx, "save to cache")
+	defer span.End()
 
 	cachedResp := cachedResponse{
 		Headers: mw.Header(),
